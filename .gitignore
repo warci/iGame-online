@@ -12,30 +12,22 @@ catalogs/*/iGame.catalog
 # Game details downloaded from OpenRetro
 cache/
 
+# FS-UAE keeps Amiga file attributes in these
+*.uaem
 
-# other rubbish
+# Files iGame creates while running, and other rubbish
 
-Disk.info
-Disk.info.uaem
+/Disk.info
 IGame-modified.zip
-cache.uaem
-gameslist.csv
-gameslist.csv.uaem
-genres
-genres.uaem
+/gameslist.csv
+/genres
 iGame.MOS
 iGame.OS4
 iGame.pot
-incoming.info
-incoming.info.uaem
-incoming.uaem
-incoming/
-onlinegames.list
-onlinegames.list.uaem
-repos.prefs
-repos.prefs.uaem
-required_files/onlinegames.list
-.gitignore
+/incoming.info
+/incoming/
+/onlinegames.list
+/repos.prefs
 
 # Release packages made by release.sh
 dist/
