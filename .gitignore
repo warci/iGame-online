@@ -36,3 +36,6 @@ repos.prefs
 repos.prefs.uaem
 required_files/onlinegames.list
 .gitignore
+
+# Release packages made by release.sh
+dist/
