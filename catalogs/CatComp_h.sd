@@ -143,11 +143,7 @@ STATIC CONST UBYTE %b_Block[] =
 
 struct %b_LocaleInfo
 {
-#ifndef __amigaos4__
     struct Library     *li_LocaleBase;
-#else
-    struct LocaleIFace *li_ILocale;
-#endif
     struct Catalog     *li_Catalog;
 };
 
@@ -168,11 +164,7 @@ CONST_STRPTR %b_GetString(struct %b_LocaleInfo *li, LONG stringNum);
 
 CONST_STRPTR %b_GetString(struct %b_LocaleInfo *li, LONG stringNum)
 {
-#ifndef __amigaos4__
     struct Library     *LocaleBase = li->li_LocaleBase;
-#else
-    struct LocaleIFace *ILocale    = li->li_ILocale;
-#endif
     LONG         *l;
     UWORD        *w;
     CONST_STRPTR  builtIn = NULL;
@@ -189,21 +181,10 @@ CONST_STRPTR %b_GetString(struct %b_LocaleInfo *li, LONG stringNum)
         builtIn = (CONST_STRPTR)((ULONG)l + 6);
     }
 
-#ifndef __amigaos4__
     if (LocaleBase)
     {
         return GetCatalogStr(li->li_Catalog, stringNum, builtIn);
     }
-#else
-    if (ILocale)
-    {
-#ifdef __USE_INLINE__
-        return GetCatalogStr(li->li_Catalog, stringNum, builtIn);
-#else
-        return ILocale->GetCatalogStr(li->li_Catalog, stringNum, builtIn);
-#endif
-    }
-#endif
     return builtIn;
 }
 

@@ -11,7 +11,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: http://URL/\n"
-"POT-Creation-Date: 2025-05-29 18:06+0000\n"
+"POT-Creation-Date: 2026-11-11 09:55+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -506,4 +506,188 @@ msgstr ""
 
 msgctxt "MSG_GR_LinksTitle (//)"
 msgid "Links"
+msgstr ""
+
+msgctxt "MSG_ItemExecutableOrSlave (//)"
+msgid "Select the slave or the executable file"
+msgstr ""
+
+msgctxt "MSG_MNlabelOnlineUpdate (//)"
+msgid "Update online games list"
+msgstr ""
+
+msgctxt "MSG_FilterInstalled (//)"
+msgid "--Installed--"
+msgstr ""
+
+msgctxt "MSG_FilterNotInstalled (//)"
+msgid "--Not installed--"
+msgstr ""
+
+msgctxt "MSG_OnlineConfirmDownload (//)"
+msgid "\"%s\" is not installed yet.\n\nDo you want to download it and install it into\n%s ?"
+msgstr ""
+
+msgctxt "MSG_OnlineConfirmButtons (//)"
+msgid "*_Download|_Cancel"
+msgstr ""
+
+msgctxt "MSG_OnlineNoInstallPath (//)"
+msgid "There is no folder to install downloaded games into.\nPlease add a games repository first."
+msgstr ""
+
+msgctxt "MSG_OnlineNoBsdsocket (//)"
+msgid "Could not open bsdsocket.library.\nPlease start your TCP/IP stack and try again."
+msgstr ""
+
+msgctxt "MSG_OnlineDownloadFailed (//)"
+msgid "Downloading \"%s\" failed.\n%s"
+msgstr ""
+
+msgctxt "MSG_OnlineExtractFailed (//)"
+msgid "Extracting the archive failed.\nPlease make sure LhA is installed in C:."
+msgstr ""
+
+msgctxt "MSG_OnlineNoSlaveFound (//)"
+msgid "The game was installed in\n%s\nbut no WHDLoad slave was found in it."
+msgstr ""
+
+msgctxt "MSG_OnlineNotInstalled (//)"
+msgid "This game is not installed yet.\nStart it to download and install it."
+msgstr ""
+
+msgctxt "MSG_OnlineWindowTitle (//)"
+msgid "iGame - Online games"
+msgstr ""
+
+msgctxt "MSG_OnlineDownloading (//)"
+msgid "Downloading %s"
+msgstr ""
+
+msgctxt "MSG_OnlineExtracting (//)"
+msgid "Installing %s..."
+msgstr ""
+
+msgctxt "MSG_OnlineFetchingList (//)"
+msgid "Fetching the games list (%ld of %ld)"
+msgstr ""
+
+msgctxt "MSG_OnlineUpdateDone (//)"
+msgid "The online games list has been updated. %ld games are available."
+msgstr ""
+
+msgctxt "MSG_OnlineUpdateFailed (//)"
+msgid "Updating the online games list failed.\n%s"
+msgstr ""
+
+msgctxt "MSG_OnlineCancel (//)"
+msgid "_Cancel"
+msgstr ""
+
+msgctxt "MSG_OnlineListMissing (//)"
+msgid "Use \"Update online games list\" in the Actions menu to see the games available online."
+msgstr ""
+
+msgctxt "MSG_DetailsTabMain (//)"
+msgid "Main"
+msgstr ""
+
+msgctxt "MSG_DetailsTabCommunity (//)"
+msgid "Community"
+msgstr ""
+
+msgctxt "MSG_DetailsSelectGame (//)"
+msgid "Select a game to see its details."
+msgstr ""
+
+msgctxt "MSG_DetailsLoading (//)"
+msgid "Loading details from OpenRetro..."
+msgstr ""
+
+msgctxt "MSG_DetailsNotFound (//)"
+msgid "No details were found for this game on OpenRetro."
+msgstr ""
+
+msgctxt "MSG_DetailsFailed (//)"
+msgid "The details could not be loaded:\n%s"
+msgstr ""
+
+msgctxt "MSG_DetailsCredits (//)"
+msgid "Credits"
+msgstr ""
+
+msgctxt "MSG_DetailsDeveloper (//)"
+msgid "Developer"
+msgstr ""
+
+msgctxt "MSG_DetailsPublisher (//)"
+msgid "Publisher"
+msgstr ""
+
+msgctxt "MSG_DetailsInformation (//)"
+msgid "Information"
+msgstr ""
+
+msgctxt "MSG_DetailsYear (//)"
+msgid "Year"
+msgstr ""
+
+msgctxt "MSG_DetailsPlayers (//)"
+msgid "Players"
+msgstr ""
+
+msgctxt "MSG_DetailsLanguages (//)"
+msgid "Languages"
+msgstr ""
+
+msgctxt "MSG_DetailsCategories (//)"
+msgid "Categories"
+msgstr ""
+
+msgctxt "MSG_DetailsDescription (//)"
+msgid "Description"
+msgstr ""
+
+msgctxt "MSG_DetailsLinks (//)"
+msgid "Links"
+msgstr ""
+
+msgctxt "MSG_DetailsUserScore (//)"
+msgid "User score"
+msgstr ""
+
+msgctxt "MSG_DetailsNoScore (//)"
+msgid "No user score yet."
+msgstr ""
+
+msgctxt "MSG_DetailsReviews (//)"
+msgid "Press reviews"
+msgstr ""
+
+msgctxt "MSG_DetailsComments (//)"
+msgid "Comments (%ld)"
+msgstr ""
+
+msgctxt "MSG_DetailsNoComments (//)"
+msgid "No comments yet."
+msgstr ""
+
+msgctxt "MSG_CreateAppFailed (//)"
+msgid "The iGame window could not be created.\nPlease check that MUI and the NList and\nTextEditor classes are installed."
+msgstr ""
+
+msgctxt "MSG_DetailsPaneFailed (//)"
+msgid "The game details pane is not available: %s could not be created."
+msgstr ""
+
+msgctxt "MSG_ProgressLookup (//)"
+msgid "Looking up the game on OpenRetro..."
+msgstr ""
+
+msgctxt "MSG_ProgressComments (//)"
+msgid "Loading the comments..."
+msgstr ""
+
+msgctxt "MSG_ProgressScreenshot (//)"
+msgid "Loading screenshot %ld of %ld..."
 msgstr ""

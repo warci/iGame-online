@@ -36,9 +36,6 @@
 #include <workbench/icon.h>
 
 /* System */
-#if defined(__amigaos4__)
-#define ASL_PRE_V38_NAMES
-#endif
 #include <libraries/asl.h>
 
 /* ANSI C */
@@ -58,6 +55,7 @@
 #include "chipsetList.h"
 #include "funcs.h"
 #include "fsfuncs.h"
+#include "onlineGames.h"
 
 extern struct ObjApp* app;
 extern char* executable_name;
@@ -93,10 +91,6 @@ void getNameFromPath(char *path, char *result, unsigned int resultSize)
 	BPTR pathLock = Lock(path, SHARED_LOCK);
 	if (pathLock) {
 
-	#if defined(__amigaos4__)
-		struct ExamineData *data = ExamineObjectTags(EX_LockInput, pathLock, TAG_END);
-		strncpy(result, data->Name, resultSize);
-	#else
 		struct FileInfoBlock *FIblock = (struct FileInfoBlock *)AllocVec(sizeof(struct FileInfoBlock), MEMF_CLEAR);
 
 		if (Examine(pathLock, FIblock))
@@ -104,7 +98,6 @@ void getNameFromPath(char *path, char *result, unsigned int resultSize)
 			strncpy(result, FIblock->fib_FileName, resultSize);
 			FreeVec(FIblock);
 		}
-	#endif
 		UnLock(pathLock);
 	}
 }
@@ -196,7 +189,7 @@ void slavesListLoadFromCSV(char *filename)
 	if (!fpgames)
 		return;
 
-	char *lineBuf = malloc(512);
+	char *lineBuf = malloc(1024);
 	if (lineBuf == NULL)
 	{
 		msg_box((const char*)GetMBString(MSG_NotEnoughMemory));
@@ -205,7 +198,7 @@ void slavesListLoadFromCSV(char *filename)
 	}
 
 	char *buf;
-	while (fgets(lineBuf, 512, fpgames) != NULL)
+	while (fgets(lineBuf, 1024, fpgames) != NULL)
 	{
 		slavesList *node = malloc(sizeof(slavesList));
 		if (node == NULL)
@@ -267,6 +260,17 @@ void slavesListLoadFromCSV(char *filename)
 			parse_field(node->chipset, buf, sizeof(node->chipset));
 		addChipsetInList(node->chipset);
 
+		// Archive name in the online repository. Not present in older lists
+		buf = strtok(NULL, ";");
+		node->remote = NULL;
+		if (buf && buf[0] == '"' && buf[1] != '"')
+		{
+			char remote[MAX_PATH_SIZE];
+			parse_field(remote, buf, sizeof(remote));
+			if (!isStringEmpty(remote))
+				node->remote = strdup(remote);
+		}
+
 		slavesListAddTail(node);
 	}
 	fclose(fpgames);
@@ -295,7 +299,7 @@ static char *csv_append_str(char *p, const char *s)
 void slavesListSaveToCSV(const char *filename)
 {
 	char csvFilename[32];
-	set(app->TX_Status, MUIA_Text_Contents, (const char*)GetMBString(MSG_SavingGamelist));
+	setStatusText((char *)GetMBString(MSG_SavingGamelist));
 
 	strlcpy(csvFilename, filename, sizeof(csvFilename));
 	strlcat(csvFilename, ".csv", sizeof(csvFilename));
@@ -314,11 +318,19 @@ void slavesListSaveToCSV(const char *filename)
 
 	/* Line buffer sized for worst-case field lengths:
 	   title(128) + user_title(128) + path(256) + genre(32) + chipset(16)
-	   + 8 int fields (up to 11 digits each) + quotes/semicolons/newline */
-	char line[700];
+	   + remote(256) + 8 int fields (up to 11 digits each)
+	   + quotes/semicolons/newline */
+	char line[1000];
 	slavesList *currPtr = getSlavesListHead();
 	while (currPtr != NULL)
 	{
+		// Hidden online items get recreated from the online list when needed
+		if (currPtr->deleted && ITEM_NOT_INSTALLED(currPtr))
+		{
+			currPtr = currPtr->next;
+			continue;
+		}
+
 		char *p = line;
 		p = csv_append_int(p, currPtr->instance);                           *p++ = ';';
 		*p++ = '"'; p = csv_append_str(p, currPtr->title);      *p++ = '"'; *p++ = ';';
@@ -333,12 +345,17 @@ void slavesListSaveToCSV(const char *filename)
 		p = csv_append_int(p, currPtr->year);                               *p++ = ';';
 		p = csv_append_int(p, currPtr->players);                            *p++ = ';';
 		*p++ = '"'; p = csv_append_str(p, currPtr->chipset);    *p++ = '"'; *p++ = ';';
+		*p++ = '"';
+		if (currPtr->remote)
+			p = csv_append_str(p, currPtr->remote);
+		*p++ = '"'; *p++ = ';';
 		*p++ = '\n';
 		fwrite(line, 1, p - line, fpgames);
 		currPtr = currPtr->next;
 	}
 
 	fclose(fpgames);
+	setStatusText("");
 	free(iobuf);
 }
 
@@ -470,13 +487,11 @@ void open_current_dir(void)
 	char *buf = AllocVec(bufSize, MEMF_CLEAR);
 	char *game_title = NULL;
 
-#if !defined(__morphos__)
 	if (get_wb_version() < 44)
 	{
 		// workbench.library doesn't support OpenWorkbenchObjectA yet
 		return;
 	}
-#endif
 
 	// Get the selected item from the list
 	DoMethod(app->LV_GamesList, MUIM_NList_GetEntry, MUIV_NList_GetEntry_Active, &game_title);
@@ -493,6 +508,13 @@ void open_current_dir(void)
 		return;
 	}
 
+	if (ITEM_NOT_INSTALLED(existingNode))
+	{
+		msg_box((const char*)GetMBString(MSG_OnlineNotInstalled));
+		FreeVec(buf);
+		return;
+	}
+
 	getParentPath(existingNode->path, buf, bufSize);
 	if(!buf)
 	{
@@ -501,15 +523,7 @@ void open_current_dir(void)
 	}
 
 	// Open path directory on workbench
-#if defined(__morphos__)
-	int execSize = sizeof(char) * MAX_EXEC_SIZE;
-	char *exec = AllocVec(execSize, MEMF_CLEAR);
-	snprintf(exec, execSize, "open %s", buf);
-	Execute(exec, 0, 0);
-	FreeVec(exec);
-#else
 	OpenWorkbenchObject(buf);
-#endif
 	FreeVec(buf);
 }
 

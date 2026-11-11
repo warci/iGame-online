@@ -36,11 +36,7 @@
 #include "strfuncs.h"
 
 // extern struct LocaleBase *LocaleBase;
-#ifndef __amigaos4__
 	extern struct Library		*LocaleBase;
-#else
-	extern struct LocaleIFace	*ILocale;
-#endif
 extern struct Catalog *Catalog;
 
 /*
@@ -295,11 +291,7 @@ STRPTR GetMBString(ULONG refId)
 {
 	const struct iGame_ArrayType *t = iGame_Array + refId;
 
-	#ifndef __amigaos4__
 	return LocaleBase ? GetCatalogStr(Catalog, t->cca_ID, t->cca_Str) : t->cca_Str;
-	#else
-	return GetCatalogStr(Catalog, t->cca_ID, t->cca_Str);
-	#endif
 }
 
 BOOL isStringEmpty(const char *string)
@@ -380,4 +372,19 @@ int strlcat(char *dst, const char *src, int dstsize)
 	*d = '\0'; // Null-terminate
 
 	return dlen + (src - s); // Total length of string tried to create
+}
+
+// Case insensitive compare of at most n characters (ASCII only)
+int strncasecmp_ig(const char *s1, const char *s2, int n)
+{
+	while (n-- > 0)
+	{
+		int c1 = tolower((unsigned char)*s1++);
+		int c2 = tolower((unsigned char)*s2++);
+		if (c1 != c2)
+			return c1 - c2;
+		if (c1 == '\0')
+			break;
+	}
+	return 0;
 }

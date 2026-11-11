@@ -82,6 +82,8 @@ static BOOL slavesListRemoveHead(void) {
 	}
 
 	slavesList *nextPtr = slavesListHead->next;
+	if (slavesListHead->remote)
+		free(slavesListHead->remote);
 	free(slavesListHead);
 	slavesListHead = nextPtr;
 	return TRUE;

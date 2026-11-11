@@ -4,9 +4,35 @@ src/*.o
 src/iGame_strings.h
 iGame.0*0
 iGame_rel/iGame.info
-iGame.MOS
-iGame.OS4
 send_to_emul
 catalogs/*/iGame.catalog
 .vscode
 .idea
+
+# Game details downloaded from OpenRetro
+cache/
+
+
+# other rubbish
+
+Disk.info
+Disk.info.uaem
+IGame-modified.zip
+cache.uaem
+gameslist.csv
+gameslist.csv.uaem
+genres
+genres.uaem
+iGame.MOS
+iGame.OS4
+iGame.pot
+incoming.info
+incoming.info.uaem
+incoming.uaem
+incoming/
+onlinegames.list
+onlinegames.list.uaem
+repos.prefs
+repos.prefs.uaem
+required_files/onlinegames.list
+.gitignore

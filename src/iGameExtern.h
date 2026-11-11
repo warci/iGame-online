@@ -37,6 +37,18 @@
 #define DEFAULT_LEMONAMIGA_URL "https://www.lemonamiga.com/games/details.php?id=%s"
 #define DEFAULT_HOL_URL "https://amiga.abime.net/games/view/game/id/%s"
 #define DEFAULT_POUET_URL "https://www.pouet.net/prod.php?which=%s"
+#define DEFAULT_ONLINE_URL "http://ftp2.grandis.nu/turran/FTP/Retroplay%20WHDLoad%20Packs/Commodore_Amiga_-_WHDLoad_-_Games/"
+#define DEFAULT_ONLINE_LIST_FILE "PROGDIR:onlinegames.list"
+#define DEFAULT_OPENRETRO_URL "https://openretro.org"
+#define DEFAULT_DETAILS_CACHE_DIR "PROGDIR:cache"
+
+/*
+ * The genres list and chipset filter used to fill the right side of the
+ * main window. That space now holds the game details pane. Set this to 1
+ * to build the old genres panel again instead.
+ */
+#define GENRES_PANEL_ENABLED 0
+#define SHOW_GENRES_PANEL (GENRES_PANEL_ENABLED && !current_settings->hide_side_panel)
 // #define SLAVE_STRING "slave"
 // #define WB_PUBSCREEN_NAME "Workbench"
 
@@ -68,6 +80,7 @@
 #define MENU_PROPERTIES_HOTKEY "P"
 #define MENU_INFORMATION_HOTKEY "I"
 #define MENU_DELETE_HOTKEY "D"
+#define MENU_ONLINEUPDATE_HOTKEY "U"
 
 #define MAX_SLAVE_TITLE_SIZE 128
 #define MAX_GENRE_NAME_SIZE 32
@@ -96,6 +109,9 @@ typedef struct settings
 	int start_with_favorites;
 	int useIgameDataTitle;
 	int show_url_links;
+	int show_online_games;			// merge the online games list into the games list
+	char online_url[MAX_PATH_SIZE];		// http:// folder with the WHDLoad archives
+	char download_path[MAX_PATH_SIZE];	// where downloaded games get installed. Empty: first repository
 	int lastScanSetup;  // It keeps info of the settings on the last scan
 							// that influence the item data
 							// It is a bitfield with the following structure
@@ -151,6 +167,10 @@ typedef struct slavesList
 	int year; // Year of release
 	int players; // Maximum number of players
 
+	char *remote; // Archive path relative to the online repository, e.g. "A/Foo_v1.0.lha".
+				  // NULL for games that don't come from there. An item that has
+				  // a remote but an empty path is available online but not installed.
+
 	struct slavesList *next;
 } slavesList;
 
@@ -178,6 +198,7 @@ enum {
 	MENU_SETTINGS,
 	MENU_REPOSITORIES,
 	MENU_MUISETTINGS,
+	MENU_ONLINEUPDATE,
 	MENU_LAST
 };
 
@@ -187,6 +208,8 @@ enum {
 	GROUP_LAST_PLAYED,
 	GROUP_MOST_PLAYED,
 	GROUP_NEVER_PLAYED,
+	GROUP_INSTALLED,
+	GROUP_NOT_INSTALLED,
 	GROUP_LAST
 };
 

@@ -106,61 +106,17 @@
 ; Checking environment
 (set #detectedCPU (database "cpu"))
 
-(set EXEC_ver (getversion "exec.library" (resident)))
-(set NEWLIB_ver (getversion "newlib.library" (resident)))
-(set AROS_ver (getversion "aros.library" (resident)))
+; iGame is built for AmigaOS 3.x (68k) only
+(set #detectedSystem "os3")
 
-; we use newlib.library to check whether we are running on AmigaOS 4.x
-(if (>= NEWLIB_ver (* 4 65536))
-		(set #detectedSystem 1)
-		(
-			; we are not running on AROS
-			; now check if we are running on MorphOS (exec.library V50+) or on AmigaOS 3.x
-			(if (>= EXEC_ver (* 50 65536))
-					(set #detectedSystem 2)
-					(set #detectedSystem 0)
-			)
-		)
-)
-
-(set #detectedSystem
-    (askchoice
-        (prompt #acknowledgeOS)
-        (help @askchoice-help)
-        (choices "AmigaOS 3.x"
-                 "AmigaOS 4.x"
-                 "MorphOS 1.x/2.x/3.x"
-        )
-        (default #detectedSystem)
-    )
-)
-; finally convert the system number into a string for easier understanding
-(set #detectedSystem
-    (select #detectedSystem "os3" "os4" "mos")
-)
-
-(if (= #detectedSystem "os4")
-    ; AmigaOS 4.x uses english locale names only
-    (
-        (set #cat_name_english               "english")
-        (set #cat_name_french                "french")
-        (set #cat_name_german                "german")
-        (set #cat_name_greek                 "greek")
-        (set #cat_name_italiano              "italian")
-        (set #cat_name_portuguese            "portuguese")
-        (set #cat_name_turkish               "turkish")
-    )
-    ; all other systems use localized locale names
-    (
-        (set #cat_name_english               "english")
-        (set #cat_name_french                "fran�ais")
-        (set #cat_name_german                "deutsch")
-        (set #cat_name_greek                 "greek")
-        (set #cat_name_italiano              "italiano")
-        (set #cat_name_portuguese            "portuguese")
-        (set #cat_name_turkish               "t�rk�e")
-    )
-)
+; AmigaOS 3.x uses localized locale names
+(set #cat_name_english               "english")
+(set #cat_name_french                "fran�ais")
+(set #cat_name_german                "deutsch")
+(set #cat_name_greek                 "greek")
+(set #cat_name_italiano              "italiano")
+(set #cat_name_portuguese            "portuguese")
+(set #cat_name_turkish               "t�rk�e")
 
 
 ;=============================================================================
@@ -206,16 +162,6 @@
 	)
 )
 
-(if (= #detectedSystem "os4")
-    (
-        (set #selectedVersion "iGame.OS4")
-    )
-)
-(if (= #detectedSystem "mos")
-    (
-        (set #selectedVersion "iGame.MOS")
-    )
-)
 
 ;=============================================================================
 ; Select destination directory
@@ -346,6 +292,14 @@
 )
 (copyfiles
 	(source "logo.iff")
+	(dest #destination)
+	(help @copyfiles-help)
+)
+
+;=============================================================================
+; Copy the list of games available online
+(copyfiles
+	(source "onlinegames.list")
 	(dest #destination)
 	(help @copyfiles-help)
 )

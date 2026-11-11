@@ -24,7 +24,12 @@
 #define _FUNCS_H
 
 void msg_box(const char *);
+void setStatusText(char *);
+void setStatusProgress(const char *, LONG);
 void game_click(void);
+void show_screenshot(STRPTR);
+void clear_screenshot(void);
+APTR newScreenshotObject(void);
 void joystick_input(ULONG);
 void app_stop(void);
 void save_list(void);

@@ -1,4 +1,19 @@
 ## iGame VERSION_TAG - [RELEASE_DATE]
+### Added
+- The games list now also shows the WHDLoad games of the Retroplay WHDLoad packs (Turran FTP). Games that are not installed are shown in italics
+- Starting a game that is not installed downloads it over bsdsocket.library (any TCP/IP stack), extracts it with LhA and starts it. The download can be cancelled
+- New menu item "Update online games list" (Amiga-U) refreshes the list of games available online
+- New list filters "Installed" and "Not installed"
+- New settings in igame.prefs: show_online_games, online_url and download_path
+- The right side of the main window is now a game details pane with two tabs. "Main" shows a screenshot, the credits, information, categories and description of the selected game. "Community" shows its user score, press reviews and comments. The details come from the OpenRetro game database (openretro.org) and are only downloaded for the game you select. They are cached in the "cache" drawer; delete it to refresh them
+- https:// downloads, when AmiSSL 5 or newer is installed
+- The comments of a game are only fetched when the Community tab is opened, which makes looking up games quicker
+
+### Changed
+- iGame is now built for AmigaOS 3.x (68k) only. The AmigaOS 4 and MorphOS builds were removed
+- The genres list and chipset filter on the right side of the main window are hidden for now, to make room for the game details pane. They can be built back in with GENRES_PANEL_ENABLED in iGameExtern.h
+- Screenshots are shown by default. Games without their own igame.iff get a screenshot from OpenRetro
+
 ### Fixed
 - Fixed the screenshots being visible for the selected entry on MorphOS (#255)
 - Fixed duplicate records in list when the repository was scanned repeatedly, and the igame.data files were used. This was surfaced only on MorphOS, but could be a potential problem on other systems as well (#265)

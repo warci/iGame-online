@@ -38,10 +38,6 @@
 #include <proto/muimaster.h>
 
 /* System */
-#if defined(__amigaos4__)
-#include <dos/obsolete.h>
-#define ASL_PRE_V38_NAMES
-#endif
 
 /* ANSI C */
 #include <stdio.h>
@@ -60,6 +56,8 @@
 #include "genresList.h"
 #include "chipsetList.h"
 #include "funcs.h"
+#include "onlineGames.h"
+#include "gameDetails.h"
 
 #ifdef BENCH
 #define BENCH_DECLARE     struct DateStamp _bench_s, _bench_e
@@ -93,9 +91,49 @@ repos_list *item_repos = NULL, *repos = NULL;
 igame_settings *current_settings = NULL;
 listFilters filters = {0};
 
+/*
+ * The status field at the bottom of the main window. It is a gauge, so
+ * downloads show their progress in it; without Gauge.mui it is a text.
+ */
+static char statusBuffer[2][192]; // the gauge keeps a pointer: alternate so it sees a change
+static int statusBufferIndex = 0;
+
+void setStatusProgress(const char *text, LONG percent)
+{
+	char *buf = statusBuffer[statusBufferIndex ^= 1];
+	char *p;
+
+	if (!app || !app->TX_Status)
+		return;
+
+	if (percent < 0) percent = 0;
+	if (percent > 100) percent = 100;
+
+	if (app->statusIsGauge)
+	{
+		strlcpy(buf, text ? text : "", sizeof(statusBuffer[0]));
+		// The gauge replaces %ld in its text with its value
+		for (p = buf; *p; p++)
+			if (*p == '%')
+				*p = ' ';
+		SetAttrs(app->TX_Status,
+			MUIA_Gauge_Current, percent,
+			MUIA_Gauge_InfoText, buf,
+			TAG_DONE);
+	}
+	else
+	{
+		if (percent > 0)
+			snprintf(buf, sizeof(statusBuffer[0]), "%s %ld%%", text ? text : "", (long)percent);
+		else
+			strlcpy(buf, text ? text : "", sizeof(statusBuffer[0]));
+		set(app->TX_Status, MUIA_Text_Contents, buf);
+	}
+}
+
 void setStatusText(char *text)
 {
-	set(app->TX_Status, MUIA_Text_Contents, text);
+	setStatusProgress(text, 0);
 }
 
 static void apply_settings()
@@ -155,11 +193,14 @@ static void setDefaultSettings(igame_settings *settings)
 	current_settings->no_smart_spaces		= FALSE;
 	current_settings->useIgameDataTitle		= TRUE;
 	current_settings->titles_from_dirs		= TRUE;
-	current_settings->hide_screenshots		= TRUE;
+	current_settings->hide_screenshots		= FALSE;
 	current_settings->screenshot_width		= 160;
 	current_settings->screenshot_height		= 128;
 	current_settings->start_with_favorites	= FALSE;
 	current_settings->lastScanSetup			= 0;
+	current_settings->show_online_games		= TRUE;
+	strlcpy(current_settings->online_url, DEFAULT_ONLINE_URL, sizeof(current_settings->online_url));
+	current_settings->download_path[0]		= '\0';
 }
 
 static void getPrefsPath(STRPTR prefsPath, STRPTR prefsFile)
@@ -240,6 +281,12 @@ igame_settings *load_settings(const char* filename)
 					current_settings->useIgameDataTitle = atoi((const char*)file_line + 21);
 				if (!strncmp(file_line, "last_scan_setup=", 16))
 					current_settings->lastScanSetup = atoi((const char*)file_line + 16);
+				if (!strncmp(file_line, "show_online_games=", 18))
+					current_settings->show_online_games = atoi((const char*)file_line + 18);
+				if (!strncmp(file_line, "online_url=", 11) && !isStringEmpty(file_line + 11))
+					strlcpy(current_settings->online_url, file_line + 11, sizeof(current_settings->online_url));
+				if (!strncmp(file_line, "download_path=", 14))
+					strlcpy(current_settings->download_path, file_line + 14, sizeof(current_settings->download_path));
 			}
 			while (1);
 
@@ -310,7 +357,7 @@ static void load_repos(const char* filename)
 
 static void populateGenresLists(void)
 {
-	if (!current_settings->hide_side_panel)
+	if (SHOW_GENRES_PANEL)
 	{
 		nnset(app->LV_GenresList, MUIA_List_Quiet, TRUE);
 
@@ -327,7 +374,7 @@ static void populateGenresLists(void)
 	int cnt = 0;
 	while (currPtr != NULL)
 	{
-		if (!current_settings->hide_side_panel)
+		if (SHOW_GENRES_PANEL)
 		{
 			DoMethod(app->LV_GenresList, MUIM_List_InsertSingle, currPtr->title, MUIV_List_Insert_Bottom);
 		}
@@ -344,7 +391,7 @@ static void populateGenresLists(void)
 	app->GenresContent[cnt++] = NULL;
 
 	nnset(app->CY_AddGameGenre, MUIA_Cycle_Entries, app->GenresContent);
-	if (!current_settings->hide_side_panel)
+	if (SHOW_GENRES_PANEL)
 	{
 		nnset(app->LV_GenresList, MUIA_List_Active, MUIV_List_Active_Top);
 		nnset(app->LV_GenresList, MUIA_List_Quiet, FALSE);
@@ -365,7 +412,8 @@ static void populateChipsetList(void)
 	}
 
 	app->CY_ChipsetListContent[cnt++] = NULL;
-	set(app->CY_ChipsetList, MUIA_Cycle_Entries, app->CY_ChipsetListContent);
+	if (SHOW_GENRES_PANEL)
+		set(app->CY_ChipsetList, MUIA_Cycle_Entries, app->CY_ChipsetListContent);
 }
 
 // Clears the list of items
@@ -408,12 +456,25 @@ void app_start(void)
 		BENCH_END("CSV load");
 	}
 
+	// Add the games that are available in the online repository
+	const LONG onlineGames = onlineMergeList();
+
 	populateGenresLists(); // This calls the filter_change()
-	if (!current_settings->hide_side_panel)
+	if (SHOW_GENRES_PANEL)
 	{
 		populateChipsetList();
 	}
 	filter_change();
+
+	if (onlineGames < 0 && current_settings->show_online_games)
+		setStatusText(GetMBString(MSG_OnlineListMissing));
+
+	if (gameDetailsPaneError())
+	{
+		static char paneMsg[160];
+		snprintf(paneMsg, sizeof(paneMsg), GetMBString(MSG_DetailsPaneFailed), gameDetailsPaneError());
+		setStatusText(paneMsg);
+	}
 	set(app->WI_MainWindow, MUIA_Window_Sleep, FALSE);
 	set(app->WI_MainWindow, MUIA_Window_ActiveObject, app->LV_GamesList);
 }
@@ -438,7 +499,7 @@ void filter_change(void)
 	}
 	else filters.title[0] = '\0';
 
-	if (!current_settings->hide_side_panel)
+	if (SHOW_GENRES_PANEL)
 	{
 		DoMethod(app->LV_GenresList, MUIM_List_GetEntry,
 			MUIV_List_GetEntry_Active, &genreSelection);
@@ -510,18 +571,12 @@ static void launchSlave(slavesList *node)
 
 					// Get the slave filename
 					getNameFromPath(node->path, buf, bufSize);
-#if !defined(__morphos__)
 					if (checkSlaveInTooltypes(infoPath, buf))
 					{
-#endif
 						int execSize = sizeof(char) * MAX_EXEC_SIZE;
 						char *exec = AllocVec(execSize, MEMF_CLEAR);
 
-#if defined(__morphos__)
-						snprintf(exec, execSize, "open %s", buf);
-#else
 						prepareWHDExecution(infoPath, exec);
-#endif
 						// Update statistics info
 						node->last_played = 1;
 						node->times_played++;
@@ -536,9 +591,7 @@ static void launchSlave(slavesList *node)
 
 						FreeVec(exec);
 						break;
-#if !defined(__morphos__)
 					}
-#endif
 				}
 			}
 
@@ -617,7 +670,19 @@ void launch_game(void)
 	if ((existingNode = slavesListSearchByTitle(game_title, sizeof(char) * MAX_SLAVE_TITLE_SIZE)) == NULL)
 	{
 		msg_box((const char*)GetMBString(MSG_SelectGameFromList));
+		FreeVec(buf);
 		return;
+	}
+
+	// Not installed yet: download it from the online repository first
+	if (ITEM_NOT_INSTALLED(existingNode))
+	{
+		if (!onlineInstallGame(existingNode))
+		{
+			setStatusText("");
+			FreeVec(buf);
+			return;
+		}
 	}
 
 	if(!check_path_exists(existingNode->path)) {
@@ -637,8 +702,7 @@ void launch_game(void)
 		launchFromWB(existingNode);
 	}
 
-	sprintf(buf, (const char *)GetMBString(MSG_TotalNumberOfGames), slavesListNodeCount(-1));
-	setStatusText(buf);
+	setStatusText("");
 
 	FreeVec(buf);
 }
@@ -661,6 +725,12 @@ static void showSlavesList(void)
 				(filters.showHiddenOnly && currPtr->hidden)
 			) && !currPtr->deleted
 		) {
+			// Online games that are not installed can be switched off
+			if (!current_settings->show_online_games && ITEM_NOT_INSTALLED(currPtr))
+			{
+				goto nextItem;
+			}
+
 			// Filter the list by the selected genre
 			if (
 				!isStringEmpty(filters.showGenre) &&
@@ -737,6 +807,12 @@ static void showSlavesList(void)
 							goto nextItem;
 						}
 						break;
+					case GROUP_INSTALLED:
+						if (ITEM_NOT_INSTALLED(currPtr)) goto nextItem;
+						break;
+					case GROUP_NOT_INSTALLED:
+						if (!ITEM_NOT_INSTALLED(currPtr)) goto nextItem;
+						break;
 				}
 			}
 
@@ -753,8 +829,8 @@ nextItem:
 	DoMethod(app->LV_GamesList, MUIM_NList_Sort);
 	set(app->LV_GamesList, MUIA_NList_Quiet, FALSE);
 
-	sprintf(buf, (const char *)GetMBString(MSG_TotalNumberOfGames), slavesListNodeCount(cnt));
-	setStatusText(buf);
+	slavesListNodeCount(cnt);
+	setStatusText("");
 	free(buf);
 }
 
@@ -1004,12 +1080,13 @@ void scan_repositories(void)
 				if (!(examineFolder(item_repos->repo))) break;
 			}
 		}
+		onlineMergeList();
 		setStatusText(GetMBString(MSG_ScanCompletedUpdatingList));
 		save_list();
 		showSlavesList();
 
 		// Clear the genres lists before populating them again
-		if (!current_settings->hide_side_panel)
+		if (SHOW_GENRES_PANEL)
 		{
 			DoMethod(app->LV_GenresList, MUIM_List_Clear);
 		}
@@ -1023,8 +1100,113 @@ void scan_repositories(void)
 	}
 }
 
+// The image the screenshot object currently shows
+static char prvScreenshot[MAX_PATH_SIZE];
+
+// Shows or hides the screenshot, with the arrows row of the details pane
+static void setScreenshotShown(BOOL show)
+{
+	if (app->GR_spacedScreenshot)
+		set(app->GR_spacedScreenshot, MUIA_ShowMe, show);
+	if (app->GR_DetailsShotRow)
+		set(app->GR_DetailsShotRow, MUIA_ShowMe, show);
+}
+
+/*
+ * Creates the screenshot image, showing the default igame.iff if there
+ * is one. Uses Guigfx.mcc when available, otherwise Dtpic.mui (MUI 4+).
+ * Returns NULL when neither works; the caller then goes without one.
+ */
+APTR newScreenshotObject(void)
+{
+	STRPTR file = check_path_exists(DEFAULT_SCREENSHOT_FILE) ? (STRPTR)DEFAULT_SCREENSHOT_FILE : NULL;
+	APTR obj = NULL;
+
+	if (!current_settings->no_guigfx)
+	{
+		obj = GuigfxObject,
+			MUIA_Guigfx_FileName, file,
+			MUIA_Guigfx_Quality, MUIV_Guigfx_Quality_Best,
+			MUIA_Guigfx_ScaleMode, NISMF_SCALEFREE | NISMF_KEEPASPECT_PICTURE,
+			MUIA_Frame, MUIV_Frame_ImageButton,
+			MUIA_FixHeight, current_settings->screenshot_height,
+			MUIA_FixWidth, current_settings->screenshot_width,
+		End;
+
+		// Use Dtpic for the screenshots from now on
+		if (!obj)
+			current_settings->no_guigfx = TRUE;
+	}
+
+	if (!obj)
+	{
+		obj = MUI_NewObject(Dtpic_Classname,
+			MUIA_Dtpic_Name, file,
+			MUIA_Frame, MUIV_Frame_ImageButton,
+		TAG_DONE);
+	}
+
+	return obj;
+}
+
+/*
+ * Adds or removes the screenshot in the details pane's Main tab, between
+ * its arrow buttons, after the "hide screenshots" setting changed.
+ */
+static void applyDetailsScreenshotChange(void)
+{
+	APTR row = app->GR_DetailsShotRow;
+
+	if (!row)
+		return;
+
+	DoMethod(row, MUIM_Group_InitChange);
+
+	if (app->GR_spacedScreenshot)
+	{
+		DoMethod(row, OM_REMMEMBER, app->GR_spacedScreenshot);
+		MUI_DisposeObject(app->GR_spacedScreenshot);
+		app->GR_spacedScreenshot = NULL;
+		app->IM_GameImage_0 = NULL;
+	}
+	prvScreenshot[0] = '\0';
+
+	if (!current_settings->hide_screenshots && (app->IM_GameImage_0 = newScreenshotObject()))
+	{
+		app->GR_spacedScreenshot = HGroup, MUIA_Group_Spacing, 0,
+			Child, HSpace(0),
+			Child, app->IM_GameImage_0,
+			Child, HSpace(0),
+			End;
+		if (!app->GR_spacedScreenshot)
+			app->IM_GameImage_0 = NULL; // disposed by the failed group
+
+		if (app->GR_spacedScreenshot)
+		{
+			// Between the arrows: take the right one out and put it back after
+			DoMethod(row, OM_REMMEMBER, app->GR_DetailsShotNext);
+			DoMethod(row, OM_ADDMEMBER, app->GR_spacedScreenshot);
+			DoMethod(row, OM_ADDMEMBER, app->GR_DetailsShotNext);
+		}
+	}
+
+	DoMethod(row, MUIM_Group_ExitChange);
+	setScreenshotShown(app->GR_spacedScreenshot && check_path_exists(DEFAULT_SCREENSHOT_FILE));
+}
+
 static void applySidePanelChange(void)
 {
+	if (!GENRES_PANEL_ENABLED)
+	{
+		sidepanelChanged = FALSE;
+		if (!current_settings->hide_side_panel)
+		{
+			applyDetailsScreenshotChange();
+			game_click(); // show the selected game's screenshot again
+		}
+		return;
+	}
+
 	if (!current_settings->hide_side_panel)
 	{
 		DoMethod(app->GR_sidepanel, MUIM_Group_InitChange);
@@ -1089,9 +1271,34 @@ static void replaceScreenshot(void)
 	DoMethod(app->GR_spacedScreenshot, MUIM_Group_ExitChange);
 }
 
-static void show_screenshot(STRPTR screenshot_path)
+/*
+ * Shows the default image, or an empty one when there is no igame.iff
+ * in the iGame drawer, so the previous game's picture doesn't linger.
+ */
+void clear_screenshot(void)
 {
-	static char prvScreenshot[MAX_PATH_SIZE];
+	if (!app->GR_spacedScreenshot)
+		return;
+
+	// Nothing to show: hide the empty frame altogether
+	if (!check_path_exists(DEFAULT_SCREENSHOT_FILE))
+	{
+		setScreenshotShown(FALSE);
+		return;
+	}
+
+	if (strcmp(prvScreenshot, DEFAULT_SCREENSHOT_FILE) && (app->IM_GameImage_1 = newScreenshotObject()))
+	{
+		replaceScreenshot();
+		strlcpy(prvScreenshot, DEFAULT_SCREENSHOT_FILE, sizeof(prvScreenshot));
+	}
+	setScreenshotShown(TRUE);
+}
+
+void show_screenshot(STRPTR screenshot_path)
+{
+	if (!app->GR_spacedScreenshot)
+		return;
 
 	if (strcmp(screenshot_path, prvScreenshot))
 	{
@@ -1115,27 +1322,46 @@ static void show_screenshot(STRPTR screenshot_path)
 			End;
 		}
 
-		if (app->IM_GameImage_1)
+		if (!app->IM_GameImage_1)
 		{
-			replaceScreenshot();
+			// Unreadable picture: hide the frame instead of showing a stale one
+			setScreenshotShown(FALSE);
+			prvScreenshot[0] = '\0';
+			return;
 		}
 
+		replaceScreenshot();
 		strcpy(prvScreenshot, screenshot_path);
 	}
+
+	setScreenshotShown(TRUE);
 }
 
-static void get_screenshot_path(char *game_title, char *result)
+/*
+ * Finds the image to show for a game. Returns TRUE only when the game
+ * has its own igame.iff screenshot; the icon and the default image are
+ * just placeholders that a downloaded screenshot may replace.
+ */
+static BOOL get_screenshot_path(char *game_title, char *result)
 {
 	int bufSize = sizeof(char) * MAX_PATH_SIZE;
 	char *buf = malloc(bufSize);
 	if(buf == NULL)
 	{
 		msg_box((const char*)GetMBString(MSG_NotEnoughMemory));
-		return;
+		return FALSE;
 	}
 
 	slavesList *existingNode = NULL;
-	if (existingNode = slavesListSearchByTitle(game_title, sizeof(char) * MAX_SLAVE_TITLE_SIZE))
+	if ((existingNode = slavesListSearchByTitle(game_title, sizeof(char) * MAX_SLAVE_TITLE_SIZE)) && ITEM_NOT_INSTALLED(existingNode))
+	{
+		// Nothing on disk yet, show the default image
+		if(check_path_exists(DEFAULT_SCREENSHOT_FILE))
+		{
+			snprintf(result, sizeof(char) * MAX_PATH_SIZE, "%s", DEFAULT_SCREENSHOT_FILE);
+		}
+	}
+	else if (existingNode)
 	{
 		getParentPath(existingNode->path, buf, bufSize);
 
@@ -1144,19 +1370,17 @@ static void get_screenshot_path(char *game_title, char *result)
 		if(checkImageDatatype(result))
 		{
 			free(buf);
-			return;
+			return TRUE;
 		}
 
 		// Return the slave icon from the game folder, if exists
 		// TODO: Check if this item is a slave. If not don't use the substring
-#if !defined(__morphos__)
 		snprintf(result, sizeof(char) * MAX_PATH_SIZE, "%s.info", substring(existingNode->path, 0, -6));
 		if(checkImageDatatype(result))
 		{
 			free(buf);
-			return;
+			return FALSE;
 		}
-#endif
 
 		// Return the default image from iGame folder, if exists
 		if(check_path_exists(DEFAULT_SCREENSHOT_FILE))
@@ -1165,6 +1389,7 @@ static void get_screenshot_path(char *game_title, char *result)
 		}
 	}
 	free(buf);
+	return FALSE;
 }
 
 static void showDefaultScreenshot(void)
@@ -1177,13 +1402,25 @@ static void showDefaultScreenshot(void)
 
 void game_click(void)
 {
-	if (current_settings->hide_side_panel || current_settings->hide_screenshots)
+	if (current_settings->hide_side_panel)
 		return;
 
 	char *game_title = NULL;
 	DoMethod(app->LV_GamesList, MUIM_NList_GetEntry, MUIV_NList_GetEntry_Active, &game_title);
 
-	if (game_title) //for some reason, game_click is called and game_title is null??
+	// Called with no active entry too, i.e. when the list gets emptied
+	if (!game_title)
+	{
+		if (!current_settings->hide_screenshots)
+			clear_screenshot();
+		gameDetailsClear();
+		return;
+	}
+
+	// The game's own screenshot first. Without one, the details pane
+	// fetches a screenshot from OpenRetro
+	BOOL ownScreenshot = FALSE;
+	if (!current_settings->hide_screenshots)
 	{
 		char *image_path = AllocVec(sizeof(char) * MAX_PATH_SIZE, MEMF_CLEAR);
 		if(image_path == NULL)
@@ -1192,11 +1429,19 @@ void game_click(void)
 			return;
 		}
 
-		get_screenshot_path(game_title, image_path);
-		show_screenshot(image_path);
+		ownScreenshot = get_screenshot_path(game_title, image_path);
+		if (image_path[0] && strcmp(image_path, DEFAULT_SCREENSHOT_FILE))
+			show_screenshot(image_path);
+		else
+			clear_screenshot();
 
 		FreeVec(image_path);
 	}
+
+	// Look the game up by its real title, not the one the user gave it
+	slavesList *node = slavesListSearchByTitle(game_title, sizeof(char) * MAX_SLAVE_TITLE_SIZE);
+	gameDetailsShow(game_title, node ? node->title : game_title,
+		!ownScreenshot && !current_settings->hide_screenshots);
 }
 
 /*
@@ -1304,7 +1549,13 @@ void slaveProperties(void)
 	}
 
 	slavesList *node = NULL;
-	if (node = slavesListSearchByTitle(title, sizeof(char) * MAX_SLAVE_TITLE_SIZE))
+	if ((node = slavesListSearchByTitle(title, sizeof(char) * MAX_SLAVE_TITLE_SIZE)) && ITEM_NOT_INSTALLED(node))
+	{
+		msg_box((const char*)GetMBString(MSG_OnlineNotInstalled));
+		return;
+	}
+
+	if (node)
 	{
 		setSlavesListBuffer(node);
 
@@ -1377,12 +1628,14 @@ void list_show_hidden(void)
 {
 	if (!filters.showHiddenOnly)
 	{
-		set(app->LV_GenresList, MUIA_Disabled, TRUE);
+		if (SHOW_GENRES_PANEL)
+			set(app->LV_GenresList, MUIA_Disabled, TRUE);
 		filters.showHiddenOnly = TRUE;
 	}
 	else
 	{
-		set(app->LV_GenresList, MUIA_Disabled, FALSE);
+		if (SHOW_GENRES_PANEL)
+			set(app->LV_GenresList, MUIA_Disabled, FALSE);
 		filters.showHiddenOnly = FALSE;
 	}
 	showSlavesList();
@@ -1624,6 +1877,12 @@ void settings_save(void)
 	FPuts(fpsettings, (CONST_STRPTR)file_line);
 	snprintf(file_line, buffer_size, "last_scan_setup=%d\n", current_settings->lastScanSetup);
 	FPuts(fpsettings, (CONST_STRPTR)file_line);
+	snprintf(file_line, buffer_size, "show_online_games=%d\n", current_settings->show_online_games);
+	FPuts(fpsettings, (CONST_STRPTR)file_line);
+	snprintf(file_line, buffer_size, "online_url=%s\n", current_settings->online_url);
+	FPuts(fpsettings, (CONST_STRPTR)file_line);
+	snprintf(file_line, buffer_size, "download_path=%s\n", current_settings->download_path);
+	FPuts(fpsettings, (CONST_STRPTR)file_line);
 
 	Close(fpsettings);
 
@@ -1686,6 +1945,7 @@ void non_whdload_ok(void)
 	node->year = 0;
 	node->players = 0;
 	node->path[0] = '\0';
+	node->remote = NULL;
 
 	get(app->PA_AddGame, MUIA_String_Contents, &path);
 	getFullPath(path, node->path);
@@ -1924,9 +2184,13 @@ void getItemInformation(void)
 		}
 
 		// Get the info from the igame.data file if that exists
-		getParentPath(node->path, igameDataPath, sizeof(char) * MAX_PATH_SIZE);
-		snprintf(igameDataPath, sizeof(char) * MAX_PATH_SIZE, "%s/%s", igameDataPath, DEFAULT_IGAMEDATA_FILE); // cppcheck-suppress sprintfOverlappingData
-		if (check_path_exists(igameDataPath))
+		igameDataPath[0] = '\0';
+		if (!ITEM_NOT_INSTALLED(node))
+		{
+			getParentPath(node->path, igameDataPath, sizeof(char) * MAX_PATH_SIZE);
+			snprintf(igameDataPath, sizeof(char) * MAX_PATH_SIZE, "%s/%s", igameDataPath, DEFAULT_IGAMEDATA_FILE); // cppcheck-suppress sprintfOverlappingData
+		}
+		if (!isStringEmpty(igameDataPath) && check_path_exists(igameDataPath))
 		{
 			const BPTR fpigamedata = Open(igameDataPath, MODE_OLDFILE);
 			if (fpigamedata)
@@ -2056,7 +2320,7 @@ void saveItemInformation(void)
 	genresList *newGenrePtr = addGenreInList(buf);
 	if (newGenrePtr != NULL)
 	{
-		if (!current_settings->hide_side_panel)
+		if (SHOW_GENRES_PANEL)
 		{
 			DoMethod(app->LV_GenresList, MUIM_List_InsertSingle, newGenrePtr->title, MUIV_List_Insert_Sorted);
 		}

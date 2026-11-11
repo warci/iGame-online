@@ -26,9 +26,6 @@
 #include <mui/TextEditor_mcc.h>
 #include <mui/NListview_mcc.h>
 
-#ifdef __morphos__
-#define SDI_TRAP_LIB
-#endif
 #include <SDI_hook.h>
 
 /* Prototypes */
@@ -45,9 +42,6 @@
 #include <libraries/gadtools.h> /* for Barlabel in MenuItem */
 #include <exec/memory.h>
 #include <dos/dos.h>
-#if defined(__amigaos4__)
-#include <dos/obsolete.h>
-#endif
 
 /* ANSI C */
 #include <stdio.h>
@@ -70,30 +64,26 @@
 #include "WinInfo.h"
 #include "WinProps.h"
 #include "WinAbout.h"
+#include "onlineGames.h"
+#include "gameDetails.h"
 
 extern igame_settings *current_settings;
 extern blockGuiGfx;
 
-#ifndef __morphos__
 static void translateMenu(struct NewMenu *);
 static void flagMenuItem(struct NewMenu *, APTR, UWORD);
 
 #define TICK (CHECKIT|MENUTOGGLE)
 #define DIS  NM_ITEMDISABLED
 #define STR_ID(x) ( (STRPTR)(x) )
-#endif // ndef __morphos__
 
-#if defined(__amigaos4__)
-#define AllocVecShared(size, flags)  AllocVecTags((size), AVT_Type, MEMF_SHARED, AVT_Lock, FALSE, ((flags)&MEMF_CLEAR) ? AVT_ClearWithValue : TAG_IGNORE, 0, TAG_DONE)
-#else
 #define AllocVecShared(size, flags)  AllocVec((size), (flags))
-#endif
 
-#ifndef __morphos__
 static struct NewMenu MenuMainWin[] =
 {
 	{ NM_TITLE, STR_ID(MSG_MNlabel2Actions)							, 0 ,0 ,0			,(APTR)MENU_ACTIONS },
 	{ NM_ITEM ,  STR_ID(MSG_MNlabelScan)							,"R",0 ,0			,(APTR)MENU_SCAN },
+	{ NM_ITEM ,  STR_ID(MSG_MNlabelOnlineUpdate)					,"U",0 ,0			,(APTR)MENU_ONLINEUPDATE },
 	{ NM_ITEM ,  STR_ID(MSG_MNMainAddnonWHDLoadgame)				,"A",0 ,0			,(APTR)MENU_ADDGAME },
 	{ NM_ITEM ,  STR_ID(MSG_MNMainMenuShowHidehiddenentries)		, 0 ,TICK ,0		,(APTR)MENU_SHOWHIDDEN },
 	{ NM_ITEM ,  NM_BARLABEL										, 0 ,0 ,0			,(APTR)0 },
@@ -114,20 +104,31 @@ static struct NewMenu MenuMainWin[] =
 
 	{ NM_END,NULL,0,0,0,NULL }
 };
-#endif // ndef __morphos__
 
 static struct Listentry
 {
 	char title[MAX_SLAVE_TITLE_SIZE];
 	char year[5];
 	char players[3];
+	BOOL notInstalled;
 } Listentry;
 
 HOOKPROTONH(DisplayLI_TextFunc, LONG, char **array, struct Listentry *entry)
 {
+	static char displayTitle[MAX_SLAVE_TITLE_SIZE + 4];
+
 	if (entry)
 	{
-		*array++ = entry->title;
+		if (entry->notInstalled)
+		{
+			// Games that will be downloaded when started are shown in italics
+			snprintf(displayTitle, sizeof(displayTitle), "\33i%s", entry->title);
+			*array++ = displayTitle;
+		}
+		else
+		{
+			*array++ = entry->title;
+		}
 		*array++ = entry->year;
 		*array++ = entry->players;
 	}
@@ -165,6 +166,7 @@ HOOKPROTONH(ConstructLI_TextFunc, APTR, APTR pool, struct slavesList *item)
 
 		snprintf(newentry->year, sizeof(newentry->year), "%d", item->year);
 		snprintf(newentry->players, sizeof(newentry->players), "%d", item->players);
+		newentry->notInstalled = ITEM_NOT_INSTALLED(item);
 
 		return newentry;
 	}
@@ -212,10 +214,8 @@ struct ObjApp *CreateApp(void)
 	static char about_text[512];
 	static char version_string[30];
 
-#ifndef __morphos__
 	APTR strip;
 	translateMenu(MenuMainWin);
-#endif // ndef __morphos__
 
 	snprintf(version_string, sizeof(version_string),
 		"%s %d.%d.%d (%s)",
@@ -228,13 +228,6 @@ struct ObjApp *CreateApp(void)
 		version_string, GetMBString(MSG_compiledForAboutWin), STR(CPU_VERS), COPY_END_YEAR, GetMBString(MSG_TX_About)
 	);
 
-#ifdef __morphos__
-	APTR	MNlabel2Actions, MNlabelScan, MNMainAddnonWHDLoadgame, MNMainMenuShowHidehiddenentries;
-	APTR	MNMainBarLabel0, MNMainAbout;
-	APTR	MNMainBarLabel1, MNMainQuit, MNlabel2Game, MNMainProperties, MNMainIformation, MNMainOpenCurrentDir;
-	APTR	MNlabel2Tools, MNMainiGameSettings;
-	APTR	MNlabel2GameRepositories, MNMainBarLabel2, MNMainMUISettings;
-#endif // ndef __morphos__
 
 	APTR	MNMainOpenList, MNMainSaveList, MNMainSaveListAs;
 	// APTR	MNMainMenuDuplicate;
@@ -256,6 +249,7 @@ struct ObjApp *CreateApp(void)
 	APTR	GR_SettingsButtons, Space_SettingsButtons1, Space_SettingsButtons2;
 
 	MakeStaticHook(MenuScanHook, scan_repositories);
+	MakeStaticHook(MenuOnlineUpdateHook, onlineUpdateList);
 	MakeStaticHook(MenuShowHideHiddenHook, list_show_hidden);
 	MakeStaticHook(MenuPropertiesHook, slaveProperties);
 	MakeStaticHook(MenuItemInfoHook, getItemInformation);
@@ -314,7 +308,9 @@ struct ObjApp *CreateApp(void)
 	object->CY_FilterListContent[2] = (CONST_STRPTR)GetMBString(MSG_FilterLastPlayed);
 	object->CY_FilterListContent[3] = (CONST_STRPTR)GetMBString(MSG_FilterMostPlayed);
 	object->CY_FilterListContent[4] = (CONST_STRPTR)GetMBString(MSG_FilterNeverPlayed);
-	object->CY_FilterListContent[5] = NULL;
+	object->CY_FilterListContent[5] = (CONST_STRPTR)GetMBString(MSG_FilterInstalled);
+	object->CY_FilterListContent[6] = (CONST_STRPTR)GetMBString(MSG_FilterNotInstalled);
+	object->CY_FilterListContent[7] = NULL;
 
 	object->CY_ChipsetListContent[0] = (CONST_STRPTR)GetMBString(MSG_FilterShowAll);
 	object->CY_ChipsetListContent[1] = NULL;
@@ -363,34 +359,26 @@ struct ObjApp *CreateApp(void)
 		MUIA_Cycle_Entries, object->CY_FilterListContent,
 		End;
 
-	if (!current_settings->hide_side_panel)
+	BOOL withSidePanel = !current_settings->hide_side_panel;
+
+	if (withSidePanel)
 	{
-		if (!current_settings->hide_screenshots) {
+		// A missing image class must not stop the whole window from opening
+		if (!current_settings->hide_screenshots && (object->IM_GameImage_0 = newScreenshotObject())) {
 
-			if (current_settings->no_guigfx) {
-				object->IM_GameImage_0 = MUI_NewObject(Dtpic_Classname,
-					MUIA_Dtpic_Name, DEFAULT_SCREENSHOT_FILE,
-					MUIA_Frame, MUIV_Frame_ImageButton,
-				TAG_DONE);
-			}
-			else {
-				object->IM_GameImage_0 = GuigfxObject,
-					MUIA_Guigfx_FileName, DEFAULT_SCREENSHOT_FILE,
-					MUIA_Guigfx_Quality, MUIV_Guigfx_Quality_Best,
-					MUIA_Guigfx_ScaleMode, NISMF_SCALEFREE | NISMF_KEEPASPECT_PICTURE,
-					MUIA_Frame, MUIV_Frame_ImageButton,
-					MUIA_FixHeight, current_settings->screenshot_height,
-					MUIA_FixWidth, current_settings->screenshot_width,
-				End;
-			}
-
+			// Hidden until there is a picture to show
 			object->GR_spacedScreenshot = HGroup, MUIA_Group_Spacing, 0,
+				MUIA_ShowMe, check_path_exists(DEFAULT_SCREENSHOT_FILE),
 				Child, HSpace(0),
 				Child, object->IM_GameImage_0,
 				Child, HSpace(0),
 				End;
+			if (!object->GR_spacedScreenshot)
+				object->IM_GameImage_0 = NULL; // disposed by the failed group
 		}
 
+#if GENRES_PANEL_ENABLED
+		// The old right column: screenshot, chipset filter and genres list
 		object->Space_Sidepanel = VSpace(1);
 
 		object->CY_ChipsetList = CycleObject,
@@ -429,7 +417,22 @@ struct ObjApp *CreateApp(void)
 				Child, object->LV_GenresList,
 				End;
 		}
+#else
+		// The game details pane, with the screenshot in its Main tab
+		object->GR_sidepanel = gameDetailsCreatePane(object);
+#endif
 
+		// Without it, fall back to the list on its own
+		if (!object->GR_sidepanel)
+		{
+			object->GR_spacedScreenshot = NULL;
+			object->IM_GameImage_0 = NULL;
+			withSidePanel = FALSE;
+		}
+	}
+
+	if (withSidePanel)
+	{
 		object->GR_leftpanel = GroupObject,
 			MUIA_HelpNode, "GR_leftpanel",
 			Child, object->CY_FilterList,
@@ -456,35 +459,37 @@ struct ObjApp *CreateApp(void)
 			End;
 	}
 
-	object->TX_Status = TextObject,
-		MUIA_Frame, MUIV_Frame_None,
-		MUIA_Text_Contents, object->STR_TX_Status,
-		MUIA_Text_SetMin, TRUE,
+	// The status field, always there: messages, and the progress of
+	// downloads in its bar. An old Gauge.mui from MUI 2 fails under newer
+	// MUI, so a plain text field stands in for it then
+	object->TX_Status = GaugeObject,
+		GaugeFrame,
+		MUIA_Gauge_Horiz, TRUE,
+		MUIA_Gauge_Max, 100,
+		MUIA_Gauge_InfoText, "",
 		End;
+	object->statusIsGauge = (object->TX_Status != NULL);
+	if (!object->TX_Status)
+	{
+		object->TX_Status = TextObject,
+			TextFrame,
+			MUIA_Background, MUII_TextBack,
+			MUIA_Text_Contents, "",
+			MUIA_Text_SetMin, FALSE,
+			End;
+	}
 
 	GROUP_ROOT = GroupObject,
 		MUIA_Group_HorizSpacing, 5,
 		MUIA_Group_VertSpacing, 5,
 		Child, GR_Filter,
 		Child, GR_main,
-		Child, object->TX_Status,
+		Child, HGroup,
+			Child, Label(GetMBString(MSG_StatusLabel)),
+			Child, object->TX_Status,
+			End,
 		End;
 
-#ifdef __morphos__
-	MNlabelScan = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNlabelScan),
-		MUIA_Menuitem_Shortcut, MENU_SCANREPOS_HOTKEY,
-		End;
-
-	MNMainAddnonWHDLoadgame = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainAddnonWHDLoadgame),
-		MUIA_Menuitem_Shortcut, MENU_ADDNONWHDLOADGAME_HOTKEY,
-		End;
-
-	MNMainMenuShowHidehiddenentries = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainMenuShowHidehiddenentries),
-		End;
-#endif
 
 	MNMainOpenList = MenuitemObject,
 		MUIA_Menuitem_Title, GetMBString(MSG_MNMainOpenList),
@@ -500,51 +505,6 @@ struct ObjApp *CreateApp(void)
 		MUIA_Menuitem_Title, GetMBString(MSG_MNMainSaveListAs),
 		End;
 
-#ifdef __morphos__
-	MNMainBarLabel0 = MUI_MakeObject(MUIO_Menuitem, NM_BARLABEL, 0, 0, 0);
-
-	MNMainAbout = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainAbout),
-		MUIA_Menuitem_Shortcut, MENU_ABOUT_HOTKEY,
-		End;
-
-	MNMainBarLabel1 = MUI_MakeObject(MUIO_Menuitem, NM_BARLABEL, 0, 0, 0);
-
-	MNMainQuit = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainQuit),
-		MUIA_Menuitem_Shortcut, MENU_QUIT_HOTKEY,
-		End;
-
-	MNlabel2Actions = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNlabel2Actions),
-		MUIA_Family_Child, MNlabelScan,
-		MUIA_Family_Child, MNMainAddnonWHDLoadgame,
-		MUIA_Family_Child, MNMainMenuShowHidehiddenentries,
-		/* MUIA_Family_Child, MNMainBarLabel5, */
-		/* MUIA_Family_Child, MNMainOpenList, */
-		/* MUIA_Family_Child, MNMainSaveList, */
-		/* MUIA_Family_Child, MNMainSaveListAs, */
-		MUIA_Family_Child, MNMainBarLabel0,
-		MUIA_Family_Child, MNMainAbout,
-		MUIA_Family_Child, MNMainBarLabel1,
-		MUIA_Family_Child, MNMainQuit,
-		End;
-
-	MNMainProperties = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainProperties),
-		MUIA_Menuitem_Shortcut, MENU_PROPERTIES_HOTKEY,
-		End;
-
-	MNMainIformation = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainIformation),
-		MUIA_Menuitem_Shortcut, MENU_INFORMATION_HOTKEY,
-		End;
-
-	MNMainOpenCurrentDir = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainOpenCurrentDir),
-		MUIA_Menuitem_Shortcut, MENU_DELETE_HOTKEY,
-		End;
-#endif // ndef __morphos__
 
 	// MNMainMenuDuplicate = MenuitemObject,
 	// 	MUIA_Menuitem_Title, GetMBString(MSG_MNMainMenuDuplicate),
@@ -555,56 +515,15 @@ struct ObjApp *CreateApp(void)
 	// 	MUIA_Menuitem_Shortcut, MENU_DELETE_HOTKEY,
 	// 	End;
 
-#ifndef __morphos__
 	if (get_wb_version() < 44)
 	{
 		flagMenuItem(MenuMainWin, (APTR)MENU_GAMEFOLDER, DIS);
 	}
-#else
-	MNlabel2Game = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNlabel2Game),
-		MUIA_Family_Child, MNMainProperties,
-		MUIA_Family_Child, MNMainIformation,
-		MUIA_Family_Child, MNMainOpenCurrentDir,
-		End;
-
-	MNMainiGameSettings = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainiGameSettings),
-		End;
-
-	MNlabel2GameRepositories = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNlabel2GameRepositories),
-		End;
-
-	MNMainBarLabel2 = MUI_MakeObject(MUIO_Menuitem, NM_BARLABEL, 0, 0, 0);
-
-	MNMainMUISettings = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNMainMUISettings),
-		End;
-
-	MNlabel2Tools = MenuitemObject,
-		MUIA_Menuitem_Title, GetMBString(MSG_MNlabel2Tools),
-		MUIA_Family_Child, MNMainiGameSettings,
-		MUIA_Family_Child, MNlabel2GameRepositories,
-		MUIA_Family_Child, MNMainBarLabel2,
-		MUIA_Family_Child, MNMainMUISettings,
-		End;
-
-	object->MN_MainMenu = MenustripObject,
-		MUIA_Family_Child, MNlabel2Actions,
-		MUIA_Family_Child, MNlabel2Game,
-		MUIA_Family_Child, MNlabel2Tools,
-		End;
-#endif // ndef __morphos__
 
 	object->WI_MainWindow = WindowObject,
 		MUIA_Window_ScreenTitle, version_string,
 		MUIA_Window_Title, GetMBString(MSG_WI_MainWindow),
-#ifndef __morphos__
 		MUIA_Window_Menustrip, strip = MUI_MakeObject(MUIO_MenustripNM, MenuMainWin, 0),
-#else
-		MUIA_Window_Menustrip, object->MN_MainMenu,
-#endif // ndef __morphos__
 		MUIA_Window_ID, MAKE_ID('0', 'I', 'G', 'A'),
 		MUIA_Window_AppWindow, TRUE,
 		WindowContents, GROUP_ROOT,
@@ -1131,12 +1050,15 @@ struct ObjApp *CreateApp(void)
 		MUIM_CallHook, &GenreClickHook
 	);
 
-	DoMethod(object->CY_ChipsetList,
-		MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_CallHook, &GenreClickHook
-	);
+	if (object->CY_ChipsetList)
+	{
+		DoMethod(object->CY_ChipsetList,
+			MUIM_Notify, MUIA_Cycle_Active, MUIV_EveryTime,
+			object->App,
+			2,
+			MUIM_CallHook, &GenreClickHook
+		);
+	}
 
 	DoMethod(object->LV_GamesList,
 		MUIM_Notify, MUIA_NList_Active, MUIV_EveryTime,
@@ -1152,19 +1074,30 @@ struct ObjApp *CreateApp(void)
 		MUIM_CallHook, &LaunchGameHook
 	);
 
-	DoMethod(object->LV_GenresList,
-		MUIM_Notify, MUIA_List_Active, MUIV_EveryTime,
-		MUIV_Notify_Self,
-		2,
-		MUIM_CallHook, &GenreClickHook
-	);
+	if (object->LV_GenresList)
+	{
+		DoMethod(object->LV_GenresList,
+			MUIM_Notify, MUIA_List_Active, MUIV_EveryTime,
+			MUIV_Notify_Self,
+			2,
+			MUIM_CallHook, &GenreClickHook
+		);
 
-	DoMethod(object->WI_MainWindow,
-		MUIM_Window_SetCycleChain, object->STR_Filter,
-		object->LV_GamesList,
-		object->LV_GenresList,
-		0
-	);
+		DoMethod(object->WI_MainWindow,
+			MUIM_Window_SetCycleChain, object->STR_Filter,
+			object->LV_GamesList,
+			object->LV_GenresList,
+			0
+		);
+	}
+	else
+	{
+		DoMethod(object->WI_MainWindow,
+			MUIM_Window_SetCycleChain, object->STR_Filter,
+			object->LV_GamesList,
+			0
+		);
+	}
 
 	DoMethod(object->WI_GameRepositories,
 		MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
@@ -1406,84 +1339,6 @@ struct ObjApp *CreateApp(void)
 		0
 	);
 
-#ifdef __morphos__
-	DoMethod(MNlabelScan,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_CallHook, &MenuScanHook
-	);
-
-	DoMethod(MNMainAddnonWHDLoadgame,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_CallHook, &MenuAddNonWhdloadHook
-	);
-
-	DoMethod(MNMainMenuShowHidehiddenentries,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_CallHook, &MenuShowHideHiddenHook
-	);
-	DoMethod(MNMainAbout,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->WI_About,
-		3,
-		MUIM_Set, MUIA_Window_Open, TRUE
-	);
-
-	DoMethod(MNMainQuit,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_Application_ReturnID, MUIV_Application_ReturnID_Quit
-	);
-
-	DoMethod(MNMainProperties,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_CallHook, &MenuPropertiesHook
-	);
-
-	DoMethod(MNMainIformation,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_CallHook, &MenuItemInfoHook
-	);
-
-	//OPEN CURRENT DIR
-	DoMethod(MNMainOpenCurrentDir,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_CallHook, &OpenCurrentDirHook
-	);
-
-	DoMethod(MNMainiGameSettings,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->WI_Settings,
-		3,
-		MUIM_Set, MUIA_Window_Open, TRUE
-	);
-
-	DoMethod(MNlabel2GameRepositories,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->WI_GameRepositories,
-		3,
-		MUIM_Set, MUIA_Window_Open, TRUE
-	);
-
-	DoMethod(MNMainMUISettings,
-		MUIM_Notify, MUIA_Menuitem_Trigger, MUIV_EveryTime,
-		object->App,
-		2,
-		MUIM_Application_OpenConfigWindow, 0
-	);
-#endif
 
 	return object;
 }
@@ -1510,10 +1365,6 @@ BOOL checkImageDatatype(STRPTR filename)
 
 	if((lock = Lock(filename, SHARED_LOCK)))
 	{
-#if defined(__morphos__)
-		UnLock(lock);
-		return TRUE; // MorphOS includes the ilbm datatype by default
-#endif
 		if((dtn = ObtainDataType(DTST_FILE, (APTR)lock, TAG_END)))
 		{
 			const struct DataTypeHeader *dth = dtn->dtn_Header;

@@ -13,9 +13,3 @@ iGame.040: $(OBJS_040)
 
 iGame.060: $(OBJS_060)
 	$(LINK) $(OBJS_060) $(LIBFLAGS) $@
-
-iGame.MOS: $(OBJS_MOS)
-	$(LINK_PPC) $(OBJS_MOS) $(LIBFLAGS_MOS) $@
-
-iGame.OS4: $(OBJS_OS4)
-	$(LINK_PPC) $(OBJS_OS4) $(LIBFLAGS_OS4) $@

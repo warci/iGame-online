@@ -35,25 +35,22 @@
 /* ANSI C */
 #include <stdlib.h>
 
-#ifndef __amigaos4__
 #define __NOLIBBASE__
 #include <proto/locale.h>
 #undef __NOLIBBASE__
-#else
-#include <proto/locale.h>
-#endif
+
+#define iGame_NUMBERS
+#include "iGame_strings.h"
 
 #include "iGameExtern.h"
 #include "fsfuncs.h"
 #include "funcs.h"
+#include "strfuncs.h"
 #include "iGameGUI.h"
+#include "onlineGames.h"
 
 /* Increase stack size */
-#if defined(__amigaos4__)
-static const char USED min_stack[] = "$STACK:102400";
-#else
 LONG __stack = 32768;
-#endif
 
 #ifndef MAKE_ID
 #define MAKE_ID(a,b,c,d) ((ULONG) (a)<<24 | (ULONG) (b)<<16 | (ULONG) (c)<<8 | (ULONG) (d))
@@ -63,19 +60,7 @@ struct ObjApp* app = NULL; /* Object */
 struct Catalog *Catalog;
 
 struct Library* MUIMasterBase;
-#ifndef __amigaos4__
 struct IntuitionBase	*IntuitionBase;
-#else
-struct Library			*IntuitionBase;
-struct DataTypesIFace	*IDataTypes;
-struct MUIMasterIFace	*IMUIMaster;
-struct GraphicsIFace	*IGraphics;
-struct IconIFace		*IIcon;
-struct IntuitionIFace	*IIntuition;
-struct LocaleIFace		*ILocale;
-struct UtilityIFace		*IUtility;
-struct WorkbenchIFace	*IWorkbench;
-#endif
 struct Library			*DataTypesBase;
 struct Library			*GfxBase;
 struct Library			*IconBase;
@@ -103,6 +88,7 @@ static void cleanUp(void)
 	if (app)
 		app_stop();
 
+	onlineCleanup();
 	executable_name = NULL;
 
 	cleanupLibraries();
@@ -138,6 +124,7 @@ int main(int argc, char **argv)
 	}
 	else
 	{
+		msg_box((const char *)GetMBString(MSG_CreateAppFailed));
 		cleanUp();
 		return RETURN_ERROR;
 	}
@@ -160,6 +147,10 @@ int main(int argc, char **argv)
 
 			case MENU_SCAN:
 				scan_repositories();
+				break;
+
+			case MENU_ONLINEUPDATE:
+				onlineUpdateList();
 				break;
 
 			case MENU_ADDGAME:
@@ -199,8 +190,6 @@ int main(int argc, char **argv)
 				break;
 		}
 
-		// TODO: This doesn't work on AmigaOS 4. Needs to be updated with compatible code
-		#if !defined(__amigaos4__) && !defined(__morphos__)
 		if (LowLevelBase)
 		{
 			const ULONG new = ReadJoyPort(unit);
@@ -212,7 +201,6 @@ int main(int argc, char **argv)
 
 			Delay(1);
 		}
-		#endif
 
 		if (running && signals) Wait(signals);
 	}
@@ -225,10 +213,6 @@ static BOOL initLocale(void)
 {
 	if ((LocaleBase = OpenLibrary("locale.library", 37)))
 	{
-		#ifdef __amigaos4__
-		ILocale = (struct LocaleIFace *)GetInterface( LocaleBase, "main", 1, NULL );
-		if(!ILocale) return clean_exit("Can't open locale.library Interface");
-		#endif
 
 		Catalog = OpenCatalog(NULL, "iGame.catalog", OC_BuiltInLanguage, (ULONG) "english", TAG_DONE);
 	}
@@ -248,10 +232,6 @@ static void cleanupLocale(void)
 		Catalog = NULL;
 	}
 
-	#if defined(__amigaos4__)
-	if (ILocale)
-		DropInterface((struct Interface *)ILocale);
-	#endif
 
 	if (LocaleBase) {
 		CloseLibrary(LocaleBase);
@@ -262,25 +242,13 @@ static void cleanupLocale(void)
 static int initLibraries(void)
 {
 
-	#ifndef __amigaos4__
 	if ((IntuitionBase = (struct IntuitionBase *)OpenLibrary("intuition.library", 37)))
-	#else
-	if ((IntuitionBase = OpenLibrary("intuition.library", 37)))
-	#endif
 	{
-		#ifdef __amigaos4__
-		IIntuition = (struct IntuitionIFace *)GetInterface( IntuitionBase, "main", 1, NULL );
-		if(!IIntuition) return clean_exit("Can't open intuition.library Interface\n");
-		#endif
 	}
 	else return clean_exit("Can't open intuition.library v37 or greater\n");
 
 	if ((MUIMasterBase = OpenLibrary(MUIMASTER_NAME, 19)))
 	{
-		#if defined(__amigaos4__)
-		IMUIMaster = (struct MUIMasterIFace *)GetInterface(MUIMasterBase, "main", 1, NULL);
-		if(!IMUIMaster) return clean_exit("Can't open muimaster Interface\n");
-		#endif
 	}
 	else return clean_exit("Can't open muimaster.library v19\n");
 
@@ -301,46 +269,26 @@ static int initLibraries(void)
 
 	if ((IconBase = OpenLibrary("icon.library", 37)))
 	{
-		#ifdef __amigaos4__
-		IIcon = (struct IconIFace *)GetInterface( IconBase, "main", 1, NULL );
-		if(!IIcon) return clean_exit("Can't open icon.library Interface\n");
-		#endif
 	}
 	else return clean_exit("Can't open icon.library v37 or greater\n");
 
 	if ((GfxBase = OpenLibrary("graphics.library", 37)))
 	{
-		#ifdef __amigaos4__
-		IGraphics = (struct GraphicsIFace *)GetInterface( GfxBase, "main", 1, NULL );
-		if(!IGraphics) return clean_exit("Can't open graphics.library Interface\n");
-		#endif
 	}
 	else return clean_exit("Can't open graphics.library v37 or greater\n");
 
 	if ((WorkbenchBase = OpenLibrary("workbench.library", 37)))
 	{
-		#ifdef __amigaos4__
-		IWorkbench = (struct WorkbenchIFace *)GetInterface( WorkbenchBase, "main", 1, NULL );
-		if(!IWorkbench) return clean_exit("Can't open workbench.library Interface\n");
-		#endif
 	}
 	else return clean_exit("Can't open workbench.library v37 or greater\n");
 
 	if ((DataTypesBase = OpenLibrary("datatypes.library", 37)))
 	{
-		#ifdef __amigaos4__
-		IDataTypes = (struct DataTypesIFace *)GetInterface( DataTypesBase, "main", 1, NULL );
-		if(!IDataTypes) return clean_exit("Can't open datatypes.library Interface\n");
-		#endif
 	}
 	else return clean_exit("Can't open datatypes.library v37 or greater\n");
 
 	if ((UtilityBase = OpenLibrary("utility.library", 37)))
 	{
-		#ifdef __amigaos4__
-		IUtility = (struct UtilityIFace *)GetInterface( UtilityBase, "main", 1, NULL );
-		if(!IUtility) return clean_exit("Can't open Utility.library Interface\n");
-		#endif
 	}
 	else return clean_exit("Can't open utility.library v37 or greater\n");
 
@@ -373,16 +321,6 @@ static int initLibraries(void)
 
 static void cleanupLibraries(void)
 {
-	#ifdef __amigaos4__
-	if(IDataTypes)		DropInterface((struct Interface *) IDataTypes);
-	if(IMUIMaster)		DropInterface((struct Interface *) IMUIMaster);
-	if(IGraphics)		DropInterface((struct Interface *) IGraphics);
-	if(IIcon)			DropInterface((struct Interface *) IIcon);
-	if(IIntuition)		DropInterface((struct Interface *) IIntuition);
-	if(ILocale)			DropInterface((struct Interface *) ILocale);
-	if(IUtility)		DropInterface((struct Interface *) IUtility);
-	if(IWorkbench)		DropInterface((struct Interface *) IWorkbench);
-	#endif
 
 	if (UrltextMCC)		CloseLibrary(UrltextMCC);
 	if (TextEditorMCC)	CloseLibrary(TextEditorMCC);
@@ -400,8 +338,5 @@ static void cleanupLibraries(void)
 
 	cleanupLocale();
 
-	#if defined(__amigaos4__)
-	if (IMUIMaster)		DropInterface((struct Interface *)IMUIMaster);
-	#endif
 	if (MUIMasterBase)	CloseLibrary(MUIMasterBase);
 }

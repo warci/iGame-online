@@ -369,3 +369,141 @@ Links
 ;
 MSG_ItemExecutableOrSlave (//)
 Select the slave or the executable file
+;
+MSG_MNlabelOnlineUpdate (//)
+Update online games list
+;
+MSG_FilterInstalled (//)
+--Installed--
+;
+MSG_FilterNotInstalled (//)
+--Not installed--
+;
+MSG_OnlineConfirmDownload (//)
+"%s" is not installed yet.\n\nDo you want to download it and install it into\n%s ?
+;
+MSG_OnlineConfirmButtons (//)
+*_Download|_Cancel
+;
+MSG_OnlineNoInstallPath (//)
+There is no folder to install downloaded games into.\nPlease add a games repository first.
+;
+MSG_OnlineNoBsdsocket (//)
+Could not open bsdsocket.library.\nPlease start your TCP/IP stack and try again.
+;
+MSG_OnlineDownloadFailed (//)
+Downloading "%s" failed.\n%s
+;
+MSG_OnlineExtractFailed (//)
+Extracting the archive failed.\nPlease make sure LhA is installed in C:.
+;
+MSG_OnlineNoSlaveFound (//)
+The game was installed in\n%s\nbut no WHDLoad slave was found in it.
+;
+MSG_OnlineNotInstalled (//)
+This game is not installed yet.\nStart it to download and install it.
+;
+MSG_OnlineWindowTitle (//)
+iGame - Online games
+;
+MSG_OnlineDownloading (//)
+Downloading %s
+;
+MSG_OnlineExtracting (//)
+Installing %s...
+;
+MSG_OnlineFetchingList (//)
+Fetching the games list (%ld of %ld)
+;
+MSG_OnlineUpdateDone (//)
+The online games list has been updated. %ld games are available.
+;
+MSG_OnlineUpdateFailed (//)
+Updating the online games list failed.\n%s
+;
+MSG_OnlineCancel (//)
+_Cancel
+;
+MSG_OnlineListMissing (//)
+Use "Update online games list" in the Actions menu to see the games available online.
+;
+MSG_DetailsTabMain (//)
+Main
+;
+MSG_DetailsTabCommunity (//)
+Community
+;
+MSG_DetailsSelectGame (//)
+Select a game to see its details.
+;
+MSG_DetailsLoading (//)
+Loading details from OpenRetro...
+;
+MSG_DetailsNotFound (//)
+No details were found for this game on OpenRetro.
+;
+MSG_DetailsFailed (//)
+The details could not be loaded:\n%s
+;
+MSG_DetailsCredits (//)
+Credits
+;
+MSG_DetailsDeveloper (//)
+Developer
+;
+MSG_DetailsPublisher (//)
+Publisher
+;
+MSG_DetailsInformation (//)
+Information
+;
+MSG_DetailsYear (//)
+Year
+;
+MSG_DetailsPlayers (//)
+Players
+;
+MSG_DetailsLanguages (//)
+Languages
+;
+MSG_DetailsCategories (//)
+Categories
+;
+MSG_DetailsDescription (//)
+Description
+;
+MSG_DetailsLinks (//)
+Links
+;
+MSG_DetailsUserScore (//)
+User score
+;
+MSG_DetailsNoScore (//)
+No user score yet.
+;
+MSG_DetailsReviews (//)
+Press reviews
+;
+MSG_DetailsComments (//)
+Comments (%ld)
+;
+MSG_DetailsNoComments (//)
+No comments yet.
+;
+MSG_CreateAppFailed (//)
+The iGame window could not be created.\nPlease check that MUI and the NList and\nTextEditor classes are installed.
+;
+MSG_DetailsPaneFailed (//)
+The game details pane is not available: %s could not be created.
+;
+MSG_ProgressLookup (//)
+Looking up the game on OpenRetro...
+;
+MSG_ProgressComments (//)
+Loading the comments...
+;
+MSG_ProgressScreenshot (//)
+Loading screenshot %ld of %ld...
+;
+MSG_StatusLabel (//)
+Status:

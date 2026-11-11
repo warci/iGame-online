@@ -45,7 +45,22 @@ struct ObjApp
 	APTR CY_FilterList;
 	APTR LV_GenresList;
 	APTR CY_ChipsetList;
-	APTR TX_Status;
+	APTR TX_Status;          // the status field: a gauge, or a text without Gauge.mui
+	BOOL statusIsGauge;
+	// Game details pane (right side of the main window)
+	APTR GR_Details;
+	APTR TX_DetailsTitle;
+	APTR GR_DetailsMain;
+	APTR LV_DetailsMain;
+	APTR FT_DetailsMain;
+	APTR LV_DetailsCommunity;
+	APTR FT_DetailsCommunity;
+	APTR BT_DetailsTabMain;
+	APTR BT_DetailsTabCommunity;
+	APTR GR_DetailsPages;
+	APTR GR_DetailsShotRow;   // arrows with the screenshot between them
+	APTR GR_DetailsShotPrev;
+	APTR GR_DetailsShotNext;
 	// Properties Window
 	APTR WI_Properties;
 	APTR TX_PropertiesGameTitle;
@@ -92,7 +107,7 @@ struct ObjApp
 	CONST_STRPTR GenresContent[256];
 	CONST_STRPTR CY_ScreenshotSizeContent[4];
 	CONST_STRPTR RA_TitlesFromContent[3];
-	CONST_STRPTR CY_FilterListContent[6];
+	CONST_STRPTR CY_FilterListContent[8];
 	CONST_STRPTR CY_ChipsetListContent[16];
 	// Information Window
 	APTR WI_Information;

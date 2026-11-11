@@ -3,12 +3,12 @@ Uploader:     walkero@gmail.com (George Sokianos)
 Author:       mrzammler@freemail.gr (Emmanuel Vasilakis)
 Type:         util/misc
 Version:      VERSION_TAG
-Architecture: m68k-amigaos >= 2.04; ppc-amigaos; ppc-morphos
+Architecture: m68k-amigaos >= 2.04
 Distribution: Aminet
 Replaces:     util/misc/iGame.lha
 
 iGame is a front-end application for your WHDLoad games and demos collection.
-It runs on AmigaOS 2.04 and above, AmigaOS 4 and MorphOS.
+It runs on AmigaOS 2.04 and above.
 
 Features
 

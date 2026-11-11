@@ -3,7 +3,7 @@
 #-------------------------------------------------------------------------
 # To compile an iGame flat executable  using this makefile, run:
 #  make -f Makefile.docker CPU=030
-#  CPU options are 000,030,040,060,MOS,OS4
+#  CPU options are 000,030,040,060 (AmigaOS 3.x / 68k only)
 #-------------------------------------------------------------------------
 ##########################################################################
 
@@ -42,8 +42,6 @@ endif
 ##########################################################################
 CC			= vc
 LINK		= vc
-CC_PPC		= vc
-LINK_PPC	= vc
 
 CPU ?= 000
 
@@ -51,16 +49,13 @@ CPU ?= 000
 # INCLUDES settings
 ##########################################################################
 
-ifneq (,$(filter 000 030 040 060,$(CPU)))
-INCLUDES += -I$(NDK32_INC) -I$(MUI50_INC)
+ifeq (,$(filter 000 030 040 060,$(CPU)))
+$(error Unsupported CPU "$(CPU)". Use 000, 030, 040 or 060)
 endif
-ifneq (,$(filter OS4,$(CPU)))
-INCLUDES += -I$(AOS4_SDK_INC) -I$(MUI50_INC) \
-	-I$(AOS4_SDK_INC)/../../local/common/include
-endif
-ifneq (,$(filter MOS,$(CPU)))
-INCLUDES += -I$(NDK_INC) -I$(MUI50_INC)
-endif
+
+# The netinclude folder holds the bsdsocket.library (TCP/IP) headers
+INCLUDES += -I$(NDK32_INC) -I$(MUI50_INC) \
+	-I$(NDK32_INC)/../SANA+RoadshowTCP-IP/netinclude
 
 ##########################################################################
 # CFLAGS settings
@@ -68,15 +63,7 @@ endif
 
 CFLAGS = -c -dontwarn=-1 -O2 -c99 $(VERS_FLAGS)
 
-ifneq (,$(filter 000 030 040 060,$(CPU)))
 CFLAGS += +aos68k -cpu=68$(CPU) -DCPU_VERS=68$(CPU)
-endif
-ifneq (,$(filter OS4,$(CPU)))
-CFLAGS += +aosppc -D__USE_INLINE__ -DCPU_VERS=AmigaOS4
-endif
-ifneq (,$(filter MOS,$(CPU)))
-CFLAGS += +morphos -DCPU_VERS=MorphOS -D__morphos__
-endif
 
 ifeq ($(DEBUG), 1)
 CFLAGS += -g -hunkdebug
@@ -95,15 +82,7 @@ ifeq ($(DEBUG), 1)
 LIBFLAGS += -g -Bamigahunk
 endif
 
-ifneq (,$(filter 000 030 040 060,$(CPU)))
 LIBFLAGS += +aos68k -o
-endif
-ifneq (,$(filter OS4,$(CPU)))
-LIBFLAGS += +aosppc -o
-endif
-ifneq (,$(filter MOS,$(CPU)))
-LIBFLAGS += +morphos -o
-endif
 
 
 ##########################################################################
@@ -114,7 +93,8 @@ igame_OBJS	= src/funcs_$(CPU).o src/iGameGUI_$(CPU).o \
 	src/iGameMain_$(CPU).o src/strfuncs_$(CPU).o src/fsfuncs_$(CPU).o \
 	src/slavesList_$(CPU).o src/genresList_$(CPU).o \
 	src/chipsetList_$(CPU).o src/WinInfo_$(CPU).o src/WinProps_$(CPU).o \
-	src/WinAbout_$(CPU).o
+	src/WinAbout_$(CPU).o src/http_$(CPU).o src/onlineGames_$(CPU).o \
+	src/gameDetails_$(CPU).o src/progressWin_$(CPU).o
 
 ##########################################################################
 # Rule for building
@@ -144,22 +124,36 @@ catalogs/%/iGame.catalog: catalogs/po/%.po catalogs/iGame.cd
 
 src/funcs_$(CPU).o: src/funcs.c src/iGame_strings.h src/strfuncs.h \
 	src/fsfuncs.h src/iGameExtern.h src/slavesList.h src/genresList.h \
-	src/chipsetList.h
+	src/chipsetList.h src/onlineGames.h src/gameDetails.h src/iGameGUI.h
 
 src/iGameGUI_$(CPU).o: src/iGameGUI.c src/iGameGUI.h src/iGame_strings.h \
 	src/fsfuncs.h src/iGameExtern.h src/version.h src/WinInfo.h \
-	src/WinProps.h src/WinAbout.h
+	src/WinProps.h src/WinAbout.h src/onlineGames.h src/gameDetails.h
 
-src/iGameMain_$(CPU).o: src/iGameMain.c src/iGameExtern.h
+src/iGameMain_$(CPU).o: src/iGameMain.c src/iGameExtern.h src/onlineGames.h
 
 src/strfuncs_$(CPU).o: src/strfuncs.c src/iGameExtern.h src/strfuncs.h \
 	src/iGame_strings.h
 
 src/fsfuncs_$(CPU).o: src/fsfuncs.c src/fsfuncs.h src/funcs.h \
 	src/iGameExtern.h src/slavesList.h src/genresList.h \
-	src/chipsetList.h src/iGame_strings.h
+	src/chipsetList.h src/iGame_strings.h src/onlineGames.h
 
-src/slavesList_$(CPU).o: src/slavesList.c src/slavesList.h
+src/slavesList_$(CPU).o: src/slavesList.c src/slavesList.h src/iGameExtern.h
+
+src/http_$(CPU).o: src/http.c src/http.h src/strfuncs.h src/version.h
+
+src/onlineGames_$(CPU).o: src/onlineGames.c src/onlineGames.h src/http.h \
+	src/iGameExtern.h src/iGameGUI.h src/iGame_strings.h src/strfuncs.h \
+	src/fsfuncs.h src/funcs.h src/slavesList.h src/genresList.h \
+	src/chipsetList.h src/progressWin.h
+
+src/gameDetails_$(CPU).o: src/gameDetails.c src/gameDetails.h src/http.h \
+	src/iGameExtern.h src/iGameGUI.h src/iGame_strings.h src/strfuncs.h \
+	src/funcs.h src/fsfuncs.h
+
+src/progressWin_$(CPU).o: src/progressWin.c src/progressWin.h \
+	src/iGameGUI.h src/iGameExtern.h src/iGame_strings.h src/strfuncs.h src/funcs.h
 
 src/genresList_$(CPU).o: src/genresList.c src/genresList.h src/strfuncs.h
 
@@ -203,8 +197,6 @@ endif
 	@if [ -f "iGame.030" ]; then cp iGame.030 iGame-$(DRONE_TAG)/; fi
 	@if [ -f "iGame.040" ]; then cp iGame.040 iGame-$(DRONE_TAG)/; fi
 	@if [ -f "iGame.060" ]; then cp iGame.060 iGame-$(DRONE_TAG)/; fi
-	@if [ -f "iGame.MOS" ]; then cp iGame.MOS iGame-$(DRONE_TAG)/; fi
-	@if [ -f "iGame.OS4" ]; then cp iGame.OS4 iGame-$(DRONE_TAG)/; fi
 	@lha -aq2o6 iGame-$(DRONE_TAG)-$(DATESTR).lha iGame-$(DRONE_TAG)/ iGame-$(DRONE_TAG).info
 
 clean-release:
